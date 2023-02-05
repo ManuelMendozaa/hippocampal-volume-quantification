@@ -61,7 +61,9 @@ def get_predicted_volumes(pred):
     """
 
     # TASK: Compute the volume of your hippocampal prediction
-    # <YOUR CODE HERE>
+    volume_ant = np.sum(pred == 1)
+    volume_post = np.sum(pred == 2)
+    total_volume = volume_ant + volume_post
 
     return {"anterior": volume_ant, "posterior": volume_post, "total": total_volume}
 
@@ -91,6 +93,7 @@ def create_report(inference, header, orig_vol, pred_vol):
     main_font = ImageFont.truetype("assets/Roboto-Regular.ttf", size=20)
 
     slice_nums = [orig_vol.shape[2]//3, orig_vol.shape[2]//2, orig_vol.shape[2]*3//4] # is there a better choice?
+    print(slice_nums)
 
     # TASK: Create the report here and show information that you think would be relevant to
     # clinicians. A sample code is provided below, but feel free to use your creative 
@@ -99,11 +102,18 @@ def create_report(inference, header, orig_vol, pred_vol):
     # depend on how you present them.
 
     # SAMPLE CODE BELOW: UNCOMMENT AND CUSTOMIZE
-    # draw.text((10, 0), "HippoVolume.AI", (255, 255, 255), font=header_font)
-    # draw.multiline_text((10, 90),
-    #                     f"Patient ID: {header.PatientID}\n"
-    #                       <WHAT OTHER INFORMATION WOULD BE RELEVANT?>
-    #                     (255, 255, 255), font=main_font)
+    draw.text((10, 0), "HippoVolume.AI", (255, 255, 255), font=header_font)
+    
+    # Generate text
+    text = f"Patient ID: {header.PatientID}\n"
+    text += f"Study ID: {header.StudyID}\n"
+    text += f"Study Date: {header.StudyDate}\n\n"
+    text += "Results:\n"
+    text += f"Anterior Volume (mm3): {inference['anterior']}\n"
+    text += f"Posterior Volume (mm3): {inference['posterior']}\n"
+    text += f"Total Volume (mm3): {inference['total']}" 
+    
+    draw.multiline_text((10, 90), text, (255, 255, 255), font=main_font)
 
     # STAND-OUT SUGGESTION:
     # In addition to text data in the snippet above, can you show some images?
@@ -117,7 +127,33 @@ def create_report(inference, header, orig_vol, pred_vol):
     # pil_i = Image.fromarray(nd_img, mode="L").convert("RGBA").resize(<dimensions>)
     # Paste the PIL image into our main report image object (pimg)
     # pimg.paste(pil_i, box=(10, 280))
+    
+    new_shape = (500, 500)
+    org_img_slice = orig_vol[slice_nums[0], :, :]
+    pred_img_slice = pred_vol = pred_vol[:orig_vol.shape[0], :orig_vol.shape[1], :orig_vol.shape[2]][slice_nums[0], :, :]
+    
 
+    # Reshape both arrays for them to have the same shape
+    orig_nd_img = np.flip((org_img_slice/np.max(org_img_slice))*0xff).T.astype(np.uint8)
+    orig_nd_img = Image.fromarray(orig_nd_img, mode="L").convert("RGB").resize(new_shape)
+    orig_nd_img = np.array(orig_nd_img)
+    
+    pred_nd_img = np.flip(pred_img_slice).T.astype(np.uint8)
+    pred_nd_img = Image.fromarray(pred_nd_img, mode="L").resize(new_shape)
+    pred_nd_img = np.array(pred_nd_img)
+    
+    # Overwrite prediction into original frame
+    orig_nd_img[pred_nd_img == 2] += np.array([100, 0, 0]).squeeze().T.astype(np.uint8)
+    orig_nd_img[pred_nd_img == 1] += np.array([0, 0, 100]).squeeze().T.astype(np.uint8)
+    
+    # Create final PIL Image
+    nd_img = Image.fromarray(orig_nd_img)
+    
+    # Write in Draw
+    pimg.paste(nd_img, box=(10, 280))
+    
+    pimg.show()
+    
     return pimg
 
 def save_report_as_dcm(header, report, path):
@@ -216,7 +252,9 @@ def get_series_for_inference(path):
     # Here we are assuming that path is a directory that contains a full study as a collection
     # of files
     # We are reading all files into a list of PyDicom objects so that we can filter them later
-    dicoms = [pydicom.dcmread(os.path.join(path, f)) for f in os.listdir(path)]
+    
+    paths = os.listdir(path)
+    dicoms = [pydicom.dcmread(os.path.join(path, f)) for f in paths]
 
     # TASK: create a series_for_inference variable that will contain a list of only 
     # those PyDicom objects that represent files that belong to the series that you 
@@ -229,7 +267,7 @@ def get_series_for_inference(path):
     # certain way. Can you figure out which is that? 
     # Hint: inspect the metadata of HippoCrop series
 
-    # <YOUR CODE HERE>
+    series_for_inference = [dicom for dicom in dicoms if dicom.SeriesDescription == "HippoCrop"]
 
     # Check if there are more than one series (using set comprehension).
     if len({f.SeriesInstanceUID for f in series_for_inference}) != 1:
@@ -258,8 +296,9 @@ if __name__ == "__main__":
     subdirs = [os.path.join(sys.argv[1], d) for d in os.listdir(sys.argv[1]) if
                 os.path.isdir(os.path.join(sys.argv[1], d))]
 
-    # Get the latest directory
-    study_dir = sorted(subdirs, key=lambda dir: os.stat(dir).st_mtime, reverse=True)[0]
+    # Get the latest directory (Fix made)
+    # study_dir = sorted(subdirs, key=lambda dir: os.stat(dir).st_mtime, reverse=True)[0]
+    study_dir = [subdir for subdir in subdirs if "HCrop" in subdir][0]
 
     print(f"Looking for series to run inference on in directory {study_dir}...")
 
@@ -271,7 +310,7 @@ if __name__ == "__main__":
     # TASK: Use the UNetInferenceAgent class and model parameter file from the previous section
     inference_agent = UNetInferenceAgent(
         device="cpu",
-        parameter_file_path=r"<PATH TO PARAMETER FILE>")
+        parameter_file_path=r"./networks/model.pth")
 
     # Run inference
     # TASK: single_volume_inference_unpadded takes a volume of arbitrary size 
@@ -283,7 +322,7 @@ if __name__ == "__main__":
 
     # Create and save the report
     print("Creating and pushing report...")
-    report_save_path = r"<TEMPORARY PATH TO SAVE YOUR REPORT FILE>"
+    report_save_path = r"report.dcm"
     # TASK: create_report is not complete. Go and complete it. 
     # STAND OUT SUGGESTION: save_report_as_dcm has some suggestions if you want to expand your
     # knowledge of DICOM format
@@ -293,14 +332,14 @@ if __name__ == "__main__":
     # Send report to our storage archive
     # TASK: Write a command line string that will issue a DICOM C-STORE request to send our report
     # to our Orthanc server (that runs on port 4242 of the local machine), using storescu tool
-    os_command("<COMMAND LINE TO SEND REPORT TO ORTHANC>")
+    os_command("storescu 127.0.0.1 4242 -v -aec HIPPOAI +r +sd /home/workspace/src/")
 
     # This line will remove the study dir if run as root user
     # Sleep to let our StoreSCP server process the report (remember - in our setup
     # the main archive is routing everyting that is sent to it, including our freshly generated
     # report) - we want to give it time to save before cleaning it up
-    time.sleep(2)
-    shutil.rmtree(study_dir, onerror=lambda f, p, e: print(f"Error deleting: {e[1]}"))
+    # time.sleep(2)
+    # shutil.rmtree(study_dir, onerror=lambda f, p, e: print(f"Error deleting: {e[1]}"))
 
     print(f"Inference successful on {header['SOPInstanceUID'].value}, out: {pred_label.shape}",
           f"volume ant: {pred_volumes['anterior']}, ",
