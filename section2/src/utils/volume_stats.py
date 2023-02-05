@@ -24,8 +24,12 @@ def Dice3d(a, b):
 
     # TASK: Write implementation of Dice3D. If you completed exercises in the lessons
     # you should already have it.
-    # <YOUR CODE HERE>
-    pass
+    intersection = np.sum((a > 0) * (b > 0))
+    volumes = np.sum(a > 0) + np.sum(b > 0)
+    
+    dice_score = 2.0 * volumes / intersection
+    
+    return dice_score
 
 def Jaccard3d(a, b):
     """
@@ -48,6 +52,9 @@ def Jaccard3d(a, b):
 
     # TASK: Write implementation of Jaccard similarity coefficient. Please do not use 
     # the Dice3D function from above to do the computation ;)
-    # <YOUR CODE GOES HERE>
-
-    return #
+    intersection = np.sum((a > 0) * (b > 0))
+    volumes = np.sum(a > 0) + np.sum(b > 0)
+    
+    jacccard_score = 1.0 * intersection / (volumes - intersection)
+    
+    return jacccard_score

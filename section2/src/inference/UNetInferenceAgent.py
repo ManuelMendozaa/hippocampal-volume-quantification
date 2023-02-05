@@ -59,6 +59,23 @@ class UNetInferenceAgent:
         # that, put all slices into a 3D Numpy array. You can verify if your method is 
         # correct by running it on one of the volumes in your training set and comparing 
         # with the label in 3D Slicer.
-        # <YOUR CODE HERE>
+        new_shape = (volume.shape[0], self.patch_size, self.patch_size)
+        image = med_reshape(volume, new_shape=new_shape)
+        
+        for i in range(image.shape[0]):
+            slice_i = image[i]
+            
+            # Preprocessing
+            _image = torch.from_numpy(slice_i / np.max(slice_i)).unsqueeze(0).unsqueeze(0)
+            data = _image.to(self.device, dtype=torch.float)
+            
+            # Forward step
+            output = self.model(data)
+            output = np.squeeze(output.cpu().detach())
+            
+            # Store prediction
+            prediction = torch.argmax(output, dim=0).numpy()
+            slices.append(prediction)
+            
 
-        return # 
+        return np.asarray(slices)
