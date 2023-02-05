@@ -52,7 +52,7 @@ List of parameters used to train the model:
 ### 4. Databases
 The EDA analysis showed a normal distribution for the hippocampus volumes centered about the 3500 mm³.
 
-![volume_distribution](section1/out/volume_distribution.png)
+![volume_distribution](../section1/out/volume_distribution.png)
 **Figure 1.** Hippocampus and Total Volume Distribution
 
 
